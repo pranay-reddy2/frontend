@@ -1,0 +1,6 @@
+.calendar-view {
+  flex: 1;
+  background: white;
+  overflow: auto;
+  padding: 1rem;
+}

@@ -1,0 +1,69 @@
+.day-view {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.day-header {
+  padding: 1rem 0;
+  border-bottom: 1px solid var(--border-color);
+  margin-bottom: 1rem;
+}
+
+.day-header h3 {
+  font-size: 1.25rem;
+  font-weight: 400;
+}
+
+.day-grid {
+  flex: 1;
+  overflow-y: auto;
+}
+
+.hour-row {
+  display: grid;
+  grid-template-columns: 80px 1fr;
+  border-bottom: 1px solid var(--border-color);
+  min-height: 60px;
+}
+
+.hour-label {
+  padding: 0.5rem;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  text-align: right;
+}
+
+.hour-cell {
+  padding: 0.5rem;
+  position: relative;
+}
+
+.hour-cell .event-block {
+  padding: 0.5rem;
+  margin-bottom: 0.5rem;
+  border-radius: 4px;
+  color: white;
+  cursor: pointer;
+}
+
+.hour-cell .event-block:hover {
+  opacity: 0.9;
+}
+
+.event-time {
+  font-size: 0.75rem;
+  font-weight: 500;
+  margin-bottom: 0.25rem;
+}
+
+.event-title {
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.event-location {
+  font-size: 0.75rem;
+  margin-top: 0.25rem;
+  opacity: 0.9;
+}
