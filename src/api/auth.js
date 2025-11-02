@@ -1,13 +1,8 @@
 import client from './client';
 
 export const authAPI = {
-  register: async (data) => {
-    const response = await client.post('/auth/register', data);
-    return response.data;
-  },
-
-  login: async (data) => {
-    const response = await client.post('/auth/login', data);
+  googleLogin: async (token) => {
+    const response = await client.post('/auth/google', { token });
     return response.data;
   },
 
