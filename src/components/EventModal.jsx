@@ -1,4 +1,4 @@
-// EventModal.jsx
+// EventModal.jsx - Fixed version with proper reminder handling
 import { useState, useEffect } from "react";
 import { useCalendarStore } from "../store/useCalendarStore";
 import RecurringEventPicker from "./RecurringEventPicker";
@@ -60,15 +60,24 @@ function EventModal({ event, onClose, onEventSaved }) {
     color: event?.color || null,
   });
 
-  const [reminders, setReminders] = useState(() =>
-    event?.reminders?.length
-      ? event.reminders.map((r, i) => ({
-          id: r.id || Date.now() + i,
-          minutes_before: r.minutes_before,
-          method: r.method || "notification",
-        }))
-      : [{ id: Date.now(), minutes_before: 10, method: "notification" }]
-  );
+  // Initialize reminders properly from event data
+  const [reminders, setReminders] = useState(() => {
+    if (event?.reminders?.length) {
+      return event.reminders.map((r) => ({
+        id: r.id || `temp_${Date.now()}_${Math.random()}`,
+        minutes_before: parseInt(r.minutes_before),
+        method: r.method || "notification",
+      }));
+    }
+    // Default reminder: 10 minutes before
+    return [
+      {
+        id: `temp_${Date.now()}`,
+        minutes_before: 10,
+        method: "notification",
+      },
+    ];
+  });
 
   const [attendees, setAttendees] = useState([]);
   const [showRecurring, setShowRecurring] = useState(false);
@@ -79,7 +88,7 @@ function EventModal({ event, onClose, onEventSaved }) {
   const [sendNotifications, setSendNotifications] = useState(true);
   const [showNotifications, setShowNotifications] = useState(false);
 
-  // auto fill endTime for new events
+  // Auto-fill endTime for new events
   useEffect(() => {
     if (!isEditing && formData.startTime && !formData.endTime) {
       const startDate = new Date(formData.startTime);
@@ -97,7 +106,6 @@ function EventModal({ event, onClose, onEventSaved }) {
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
     if (type === "checkbox" && name === "isAllDay") {
-      // toggle formats
       if (checked) {
         const startDate = formData.startTime
           ? formData.startTime.split("T")[0]
@@ -193,32 +201,6 @@ function EventModal({ event, onClose, onEventSaved }) {
     await fetchEvents(start, end);
   };
 
-  const sendEmailNotifications = async (
-    eventId,
-    eventData,
-    attendeeEmails,
-    notificationType = "invite"
-  ) => {
-    if (!sendNotifications || !attendeeEmails?.length) return;
-    try {
-      await fetch("/api/events/notify", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${localStorage.getItem("token")}`,
-        },
-        body: JSON.stringify({
-          eventId,
-          eventData,
-          attendeeEmails,
-          notificationType,
-        }),
-      });
-    } catch (err) {
-      console.warn("Failed to send notifications:", err);
-    }
-  };
-
   const handleSubmit = async () => {
     if (isSubmitting) return;
     if (!formData.title.trim()) {
@@ -236,6 +218,17 @@ function EventModal({ event, onClose, onEventSaved }) {
 
     setIsSubmitting(true);
 
+    // Prepare reminders - filter out invalid ones
+    const validReminders = reminders
+      .filter((r) => {
+        const mins = parseInt(r.minutes_before);
+        return !isNaN(mins) && mins >= 0;
+      })
+      .map((r) => ({
+        minutes_before: parseInt(r.minutes_before),
+        method: r.method || "notification",
+      }));
+
     const eventData = {
       calendarId: parseInt(formData.calendarId),
       title: formData.title,
@@ -248,16 +241,11 @@ function EventModal({ event, onClose, onEventSaved }) {
       isRecurring: !!formData.recurrenceRule,
       recurrenceRule: formData.recurrenceRule,
       color: formData.color,
-      reminders: reminders
-        .filter(
-          (r) => r.minutes_before !== null && r.minutes_before !== undefined
-        )
-        .map((r) => ({
-          minutes_before: parseInt(r.minutes_before),
-          method: r.method || "notification",
-        })),
+      reminders: validReminders,
       attendees: attendees.map((a) => a.email),
     };
+
+    console.log("Submitting event with reminders:", validReminders);
 
     try {
       let eventId;
@@ -270,22 +258,12 @@ function EventModal({ event, onClose, onEventSaved }) {
         eventId = result?.id || result?.data?.id;
       }
 
-      if (attendees.length > 0) {
-        const attendeeEmails = attendees.map((a) => a.email);
-        await sendEmailNotifications(
-          eventId,
-          eventData,
-          attendeeEmails,
-          isEditing ? "update" : "invite"
-        );
-      }
-
       await refreshEvents();
       onEventSaved?.();
       onClose();
     } catch (err) {
       console.error("Save error", err);
-      alert("Failed to save event");
+      alert("Failed to save event: " + (err.message || "Unknown error"));
     } finally {
       setIsSubmitting(false);
     }
@@ -297,29 +275,6 @@ function EventModal({ event, onClose, onEventSaved }) {
       const baseId = event.id.toString().split("_")[0];
       const deleteAll =
         formData.recurrenceRule && window.confirm("Delete all occurrences?");
-      if (sendNotifications && attendees.length > 0) {
-        try {
-          await fetch("/api/events/notify", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${localStorage.getItem("token")}`,
-            },
-            body: JSON.stringify({
-              eventId: baseId,
-              eventData: {
-                title: formData.title,
-                startTime: formData.startTime,
-                endTime: formData.endTime,
-              },
-              attendeeEmails: attendees.map((a) => a.email),
-              notificationType: "cancel",
-            }),
-          });
-        } catch (nerr) {
-          console.warn("Cancel notify failed", nerr);
-        }
-      }
       await deleteEvent(baseId, deleteAll);
       await refreshEvents();
       onEventSaved?.();
@@ -350,7 +305,7 @@ function EventModal({ event, onClose, onEventSaved }) {
           className="bg-white dark:bg-[#303134] rounded-lg shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col transition-colors"
           onClick={(e) => e.stopPropagation()}
         >
-          {/* header */}
+          {/* Header */}
           <div className="flex items-center px-6 py-4 border-b border-gray-200 dark:border-gray-700/50">
             <div
               className="w-4 h-4 rounded-sm mr-3"
@@ -367,14 +322,13 @@ function EventModal({ event, onClose, onEventSaved }) {
               className="flex-1 text-lg font-normal text-gray-900 dark:text-gray-100 bg-transparent outline-none placeholder-gray-400 dark:placeholder-gray-500"
             />
 
-            {/* Notifications bell toggles popup */}
             <button
               onClick={() => setShowNotifications((s) => !s)}
               className="w-9 h-9 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700/40 flex items-center justify-center mr-2"
               title="Notifications"
             >
               <span className="material-icons-outlined text-gray-600 dark:text-gray-300">
-                help
+                notifications
               </span>
             </button>
 
@@ -389,11 +343,11 @@ function EventModal({ event, onClose, onEventSaved }) {
             </button>
           </div>
 
-          {/* body */}
+          {/* Body */}
           <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
             {formData.startTime && <HolidayBadge date={formData.startTime} />}
 
-            {/* date/time row */}
+            {/* Date/time */}
             <div className="flex gap-3">
               <span className="material-icons-outlined text-gray-500 mt-2">
                 schedule
@@ -431,7 +385,7 @@ function EventModal({ event, onClose, onEventSaved }) {
               </div>
             </div>
 
-            {/* recurrence */}
+            {/* Recurrence */}
             <div className="flex gap-3">
               <span className="material-icons-outlined text-gray-500 mt-2">
                 repeat
@@ -457,28 +411,17 @@ function EventModal({ event, onClose, onEventSaved }) {
               </div>
             </div>
 
-            {/* reminders inline */}
+            {/* Reminders - ALWAYS VISIBLE */}
             <div className="flex gap-3">
               <span className="material-icons-outlined text-gray-500 mt-2">
                 notifications
               </span>
               <div className="flex-1">
                 <ReminderPicker reminders={reminders} onChange={setReminders} />
-                <label className="flex items-center gap-2 mt-2">
-                  <input
-                    type="checkbox"
-                    checked={sendNotifications}
-                    onChange={(e) => setSendNotifications(e.target.checked)}
-                    className="w-4 h-4 text-blue-600 rounded"
-                  />
-                  <span className="text-sm text-gray-700 dark:text-gray-300">
-                    Send email invitations to attendees
-                  </span>
-                </label>
               </div>
             </div>
 
-            {/* more options */}
+            {/* More options button */}
             <button
               onClick={() => setShowMoreOptions((s) => !s)}
               className="text-sm text-blue-600 dark:text-blue-400 flex items-center gap-1"
@@ -547,11 +490,25 @@ function EventModal({ event, onClose, onEventSaved }) {
                     className="flex-1 px-3 py-2 text-sm rounded-md border dark:border-gray-600 bg-white dark:bg-[#3c4043] text-gray-900 dark:text-gray-100 resize-none"
                   />
                 </div>
+
+                <div className="flex gap-3 items-start">
+                  <span className="material-icons-outlined text-gray-500 mt-2">
+                    location_on
+                  </span>
+                  <input
+                    type="text"
+                    name="location"
+                    value={formData.location}
+                    onChange={handleChange}
+                    placeholder="Add location"
+                    className="flex-1 px-3 py-2 text-sm rounded-md border dark:border-gray-600 bg-white dark:bg-[#3c4043] text-gray-900 dark:text-gray-100"
+                  />
+                </div>
               </>
             )}
           </div>
 
-          {/* footer */}
+          {/* Footer */}
           <div className="flex items-center justify-between px-6 py-4 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-[#292a2d]">
             <div>
               {isEditing && (
@@ -583,7 +540,6 @@ function EventModal({ event, onClose, onEventSaved }) {
         </div>
       </div>
 
-      {/* Recurring dialog */}
       {showRecurringDialog && (
         <RecurringEditDialog
           isOpen
@@ -593,7 +549,6 @@ function EventModal({ event, onClose, onEventSaved }) {
         />
       )}
 
-      {/* Notification popup (floating) */}
       {showNotifications && (
         <NotificationPopup
           onClose={() => setShowNotifications(false)}
