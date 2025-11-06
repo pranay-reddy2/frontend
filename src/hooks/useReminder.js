@@ -51,7 +51,7 @@ export default function useReminders(events, showToast) {
           }
         });
       });
-    }, 15000); // check every 15s
+    }, 15050); // check every 15s
 
     return () => clearInterval(interval);
   }, [events, showToast]);

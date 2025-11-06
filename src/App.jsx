@@ -115,6 +115,9 @@ function App() {
           <Routes>
             <Route path="/" element={<Calendar />} />
           </Routes>
+          <Routes>
+            <Route path="/login" element={<Login />} />
+          </Routes>
         </BrowserRouter>
       </div>
     </GoogleOAuthProvider>
