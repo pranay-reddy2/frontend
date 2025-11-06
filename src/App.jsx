@@ -113,16 +113,7 @@ function App() {
           }}
         >
           <Routes>
-            <Route
-              path="/login"
-              element={!isAuthenticated ? <Login /> : <Navigate to="/" />}
-            />
-            <Route
-              path="/"
-              element={
-                isAuthenticated ? <Calendar /> : <Navigate to="/login" />
-              }
-            />
+            <Route path="/" element={<Calendar />} />
           </Routes>
         </BrowserRouter>
       </div>
