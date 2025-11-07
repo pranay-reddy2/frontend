@@ -2,14 +2,14 @@ import axios from "axios";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5050/api";
 
-const client = axios.create({
+const authClient = axios.create({
   baseURL: API_URL,
   headers: {
     "Content-Type": "application/json",
   },
 });
 
-client.interceptors.request.use((config) => {
+authClient.interceptors.request.use((config) => {
   const token = localStorage.getItem("token");
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
@@ -17,15 +17,14 @@ client.interceptors.request.use((config) => {
   return config;
 });
 
-client.interceptors.response.use(
-  (response) => response,
-  (error) => {
-    if (error.response?.status === 401) {
-      localStorage.removeItem("token");
-      window.location.href = "/login";
-    }
-    return Promise.reject(error);
-  }
-);
+export const authAPI = {
+  googleLogin: async (token) => {
+    const response = await authClient.post('/auth/google', { token });
+    return response.data;
+  },
 
-export default client;
+  getProfile: async () => {
+    const response = await authClient.get('/auth/profile');
+    return response.data;
+  },
+};
