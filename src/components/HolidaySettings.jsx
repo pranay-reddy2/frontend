@@ -20,7 +20,7 @@ function HolidaySettings({ isOpen, onClose }) {
 
       // Load supported countries
       const countriesRes = await fetch(
-        "http://localhost:5050/api/holidays/countries",
+        "https://calendar-backend-production-d7a3.up.railway.app/api/holidays/countries",
         {
           headers: { Authorization: `Bearer ${token}` },
         }
@@ -30,7 +30,7 @@ function HolidaySettings({ isOpen, onClose }) {
 
       // Load user preferences
       const prefsRes = await fetch(
-        "http://localhost:5050/api/holidays/preferences",
+        "https://calendar-backend-production-d7a3.up.railway.app/api/holidays/preferences",
         {
           headers: { Authorization: `Bearer ${token}` },
         }
@@ -50,7 +50,7 @@ function HolidaySettings({ isOpen, onClose }) {
     try {
       const token = localStorage.getItem("token");
       const response = await fetch(
-        "http://localhost:5050/api/holidays/preferences",
+        "https://calendar-backend-production-d7a3.up.railway.app/api/holidays/preferences",
         {
           method: "POST",
           headers: {
@@ -78,18 +78,21 @@ function HolidaySettings({ isOpen, onClose }) {
   const handleTogglePreference = async (pref) => {
     try {
       const token = localStorage.getItem("token");
-      await fetch("http://localhost:5050/api/holidays/preferences", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          countryCode: pref.countryCode,
-          region: pref.region,
-          isEnabled: !pref.isEnabled,
-        }),
-      });
+      await fetch(
+        "https://calendar-backend-production-d7a3.up.railway.app/api/holidays/preferences",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            countryCode: pref.countryCode,
+            region: pref.region,
+            isEnabled: !pref.isEnabled,
+          }),
+        }
+      );
       loadData();
     } catch (error) {
       console.error("Failed to toggle preference:", error);
