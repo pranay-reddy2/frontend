@@ -19,7 +19,6 @@ client.interceptors.request.use((config) => {
   return config;
 });
 
-// Export default client for other API modules
 export default client;
 
 // Export auth API directly from this file
