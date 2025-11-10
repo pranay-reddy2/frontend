@@ -1,5 +1,8 @@
 import { create } from "zustand";
 
+// ✅ Use environment variable instead of hardcoded localhost
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5050/api";
+
 export const useHolidayStore = create((set, get) => ({
   holidays: [],
   preferences: [],
@@ -38,8 +41,8 @@ export const useHolidayStore = create((set, get) => ({
     set({ isLoading: true, error: null });
 
     try {
-      // Build URL with query parameters
-      const url = new URL("http://localhost:5050/api/holidays");
+      // ✅ Use API_URL variable
+      const url = new URL(`${API_URL}/holidays`);
       url.searchParams.append("startDate", startDateStr);
       url.searchParams.append("endDate", endDateStr);
 
@@ -93,12 +96,9 @@ export const useHolidayStore = create((set, get) => ({
     if (!token) return;
 
     try {
-      const res = await fetch(
-        "http://localhost:5050/api/holidays/preferences",
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
-      );
+      const res = await fetch(`${API_URL}/holidays/preferences`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
 
       if (!res.ok) {
         const text = await res.text();
@@ -125,21 +125,18 @@ export const useHolidayStore = create((set, get) => ({
     if (!token) return;
 
     try {
-      const res = await fetch(
-        "http://localhost:5050/api/holidays/preferences",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            countryCode,
-            region,
-            isEnabled: true,
-          }),
-        }
-      );
+      const res = await fetch(`${API_URL}/holidays/preferences`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          countryCode,
+          region,
+          isEnabled: true,
+        }),
+      });
 
       if (res.ok) {
         console.log(
@@ -171,21 +168,18 @@ export const useHolidayStore = create((set, get) => ({
     if (!token) return;
 
     try {
-      const res = await fetch(
-        "http://localhost:5050/api/holidays/preferences",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            countryCode: pref.countryCode,
-            region: pref.region,
-            isEnabled: !pref.isEnabled,
-          }),
-        }
-      );
+      const res = await fetch(`${API_URL}/holidays/preferences`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          countryCode: pref.countryCode,
+          region: pref.region,
+          isEnabled: !pref.isEnabled,
+        }),
+      });
 
       if (res.ok) {
         console.log(
@@ -213,7 +207,7 @@ export const useHolidayStore = create((set, get) => ({
     if (!token) return;
 
     try {
-      const res = await fetch("http://localhost:5050/api/holidays/sync", {
+      const res = await fetch(`${API_URL}/holidays/sync`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
