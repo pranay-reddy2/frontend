@@ -1,67 +1,83 @@
 import { create } from "zustand";
-import { authAPI } from "../api/auth"; // Assuming you have an API utility for authentication
 import axios from "axios";
+
+const API_BASE_URL = "https://calendar-backend-production-d7a3.up.railway.app/api/auth";
 
 export const useAuthStore = create((set) => ({
   user: null,
   token: null,
   isAuthenticated: false,
-  isLoading: true, // Add a loading state
+  isLoading: false,
   error: null,
 
-  // Login with Google (updated to only have one function)
+  // 🔹 Login with Google
   loginWithGoogle: async (googleToken) => {
     set({ isLoading: true, error: null });
+
     try {
-      const data = await authAPI.googleLogin(googleToken); // Assuming this function exists
+      const res = await axios.post(`${API_BASE_URL}/google`, {
+        credential: googleToken,
+      });
+
+      const data = res.data;
+
+      if (!data?.token) {
+        throw new Error("No token received from backend");
+      }
+
+      // ✅ Save JWT token in localStorage
       localStorage.setItem("token", data.token);
+
+      // ✅ Update Zustand state
       set({
         user: data.user,
         token: data.token,
         isAuthenticated: true,
         isLoading: false,
       });
+
+      console.log("✅ Logged in successfully:", data.user);
       return data;
     } catch (error) {
+      console.error("❌ Login failed:", error.response?.data || error.message);
+
       set({
         error: error.response?.data?.error || "Login failed",
         isLoading: false,
       });
+
       throw error;
     }
   },
 
-  // Load user data (either from demo or real authentication)
+  // 🔹 Load user profile (auto-login if token exists)
   loadUser: async () => {
     const token = localStorage.getItem("token");
 
-    // If there's no token, set loading to false and return
     if (!token) {
-      set({ isLoading: false });
+      set({ isAuthenticated: false, user: null, token: null, isLoading: false });
       return;
     }
 
-    // Simulating demo mode - Always authenticated
-    set({
-      isAuthenticated: true,
-      user: { id: 1, name: "Demo User", email: "demo@example.com" },
-      isLoading: false,
-    });
-
     set({ isLoading: true });
+
     try {
-      const response = await axios.get("/api/auth/profile", {
+      const res = await axios.get(`${API_BASE_URL}/profile`, {
         headers: { Authorization: `Bearer ${token}` },
       });
+
       set({
-        user: response.data,
+        user: res.data,
         token,
         isAuthenticated: true,
         isLoading: false,
       });
+
+      console.log("✅ User loaded:", res.data);
     } catch (error) {
-      console.error("Failed to load user:", error);
+      console.error("❌ Failed to load user:", error);
       localStorage.removeItem("token");
+
       set({
         user: null,
         token: null,
@@ -71,16 +87,16 @@ export const useAuthStore = create((set) => ({
     }
   },
 
-  // Logout (clear the user and token)
+  // 🔹 Logout (clear user + token)
   logout: () => {
+    console.log("🚪 Logging out...");
     localStorage.removeItem("token");
+
     set({
       user: null,
       token: null,
       isAuthenticated: false,
+      isLoading: false,
     });
   },
-
-  // Register and other possible functions
-  // You can add other methods for sign up, password reset, etc.
 }));
