@@ -1,4 +1,4 @@
-// EventModal.jsx - Fixed version with proper reminder handling
+// EventModal.jsx - FIXED VERSION with proper timezone handling
 import { useState, useEffect } from "react";
 import { useCalendarStore } from "../store/useCalendarStore";
 import RecurringEventPicker from "./RecurringEventPicker";
@@ -23,44 +23,70 @@ function EventModal({ event, onClose, onEventSaved }) {
   const isEditing = !!event;
   const isRecurring = event?.recurrence_rule;
 
-  const formatToDatetimeLocal = (date) => {
+  // ✅ PROPER TIMEZONE CONVERSION FUNCTIONS
+  
+  /**
+   * Convert UTC date to local datetime-local input format
+   * @param {string|Date} utcDate - UTC date from database
+   * @returns {string} - Format: "2025-11-10T14:30"
+   */
+  const utcToLocal = (utcDate) => {
+    if (!utcDate) return "";
+    const date = new Date(utcDate);
+    // Get local time components
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    return `${year}-${month}-${day}T${hours}:${minutes}`;
+  };
+
+  /**
+   * Convert local datetime-local input to UTC ISO string
+   * @param {string} localDateTime - Format: "2025-11-10T14:30"
+   * @returns {string} - UTC ISO string for database
+   */
+  const localToUTC = (localDateTime) => {
+    if (!localDateTime) return "";
+    // Create date from local input (browser automatically handles timezone)
+    const date = new Date(localDateTime);
+    return date.toISOString();
+  };
+
+  /**
+   * Convert date to date-only input format (for all-day events)
+   * @param {string|Date} date
+   * @returns {string} - Format: "2025-11-10"
+   */
+  const toDateOnly = (date) => {
     if (!date) return "";
-    if (!(date instanceof Date)) date = new Date(date);
-    const offset = date.getTimezoneOffset();
-    const localDate = new Date(date.getTime() - offset * 60000);
-    return localDate.toISOString().slice(0, 16);
+    const d = new Date(date);
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
   };
 
-  const formatToDateOnly = (date) => {
-    if (!date) return "";
-    if (!(date instanceof Date)) date = new Date(date);
-    const offset = date.getTimezoneOffset();
-    const localDate = new Date(date.getTime() - offset * 60000);
-    return localDate.toISOString().slice(0, 10);
-  };
-
-  const toLocalDateTime = (utcString, isAllDay) => {
-    if (!utcString) return "";
-    const date = new Date(utcString);
-    return isAllDay ? formatToDateOnly(date) : formatToDatetimeLocal(date);
-  };
-
+  // ✅ INITIALIZE FORM DATA with proper timezone conversion
   const [formData, setFormData] = useState({
     calendarId: event?.calendar_id || calendars[0]?.id || "",
     title: event?.title || "",
     description: event?.description || "",
     location: event?.location || "",
-    startTime:
-      toLocalDateTime(event?.start_time, event?.is_all_day) ||
-      formatToDatetimeLocal(new Date()),
-    endTime: toLocalDateTime(event?.end_time, event?.is_all_day),
+    startTime: event 
+      ? (event.is_all_day ? toDateOnly(event.start_time) : utcToLocal(event.start_time))
+      : utcToLocal(new Date()),
+    endTime: event 
+      ? (event.is_all_day ? toDateOnly(event.end_time) : utcToLocal(event.end_time))
+      : "",
     isAllDay: event?.is_all_day || false,
     timezone: event?.timezone || "Asia/Kolkata",
     recurrenceRule: event?.recurrence_rule || null,
     color: event?.color || null,
   });
 
-  // Initialize reminders properly from event data
+  // Initialize reminders
   const [reminders, setReminders] = useState(() => {
     if (event?.reminders?.length) {
       return event.reminders.map((r) => ({
@@ -69,7 +95,6 @@ function EventModal({ event, onClose, onEventSaved }) {
         method: r.method || "notification",
       }));
     }
-    // Default reminder: 10 minutes before
     return [
       {
         id: `temp_${Date.now()}`,
@@ -88,34 +113,45 @@ function EventModal({ event, onClose, onEventSaved }) {
   const [sendNotifications, setSendNotifications] = useState(true);
   const [showNotifications, setShowNotifications] = useState(false);
 
-  // Auto-fill endTime for new events
+  // ✅ Auto-fill end time for new events
   useEffect(() => {
     if (!isEditing && formData.startTime && !formData.endTime) {
-      const startDate = new Date(formData.startTime);
-      if (formData.isAllDay) startDate.setDate(startDate.getDate() + 1);
-      else startDate.setHours(startDate.getHours() + 1);
-      setFormData((prev) => ({
-        ...prev,
-        endTime: formData.isAllDay
-          ? formatToDateOnly(startDate)
-          : formatToDatetimeLocal(startDate),
-      }));
+      if (formData.isAllDay) {
+        // For all-day events, end time is next day
+        const startDate = new Date(formData.startTime + "T00:00:00");
+        startDate.setDate(startDate.getDate() + 1);
+        setFormData((prev) => ({
+          ...prev,
+          endTime: toDateOnly(startDate),
+        }));
+      } else {
+        // For timed events, end time is 1 hour later
+        const startDate = new Date(formData.startTime);
+        startDate.setHours(startDate.getHours() + 1);
+        setFormData((prev) => ({
+          ...prev,
+          endTime: utcToLocal(startDate),
+        }));
+      }
     }
   }, [formData.startTime, formData.isAllDay, isEditing]);
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
+    
     if (type === "checkbox" && name === "isAllDay") {
       if (checked) {
-        const startDate = formData.startTime
-          ? formData.startTime.split("T")[0]
-          : "";
-        let endDate = formData.endTime ? formData.endTime.split("T")[0] : "";
+        // Converting to all-day: use date portion only
+        const startDate = formData.startTime ? toDateOnly(formData.startTime) : "";
+        let endDate = formData.endTime ? toDateOnly(formData.endTime) : "";
+        
+        // If no end date, set to next day
         if (!endDate && startDate) {
-          const next = new Date(startDate);
-          next.setDate(next.getDate() + 1);
-          endDate = formatToDateOnly(next);
+          const nextDay = new Date(startDate + "T00:00:00");
+          nextDay.setDate(nextDay.getDate() + 1);
+          endDate = toDateOnly(nextDay);
         }
+        
         setFormData((prev) => ({
           ...prev,
           isAllDay: true,
@@ -123,12 +159,13 @@ function EventModal({ event, onClose, onEventSaved }) {
           endTime: endDate,
         }));
       } else {
+        // Converting to timed event: add current time
         const now = new Date();
-        const t = `${String(now.getHours()).padStart(2, "0")}:${String(
-          now.getMinutes()
-        ).padStart(2, "0")}`;
-        const startDt = formData.startTime ? `${formData.startTime}T${t}` : "";
-        const endDt = formData.endTime ? `${formData.endTime}T${t}` : "";
+        const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+        
+        const startDt = formData.startTime ? `${formData.startTime}T${timeStr}` : utcToLocal(new Date());
+        const endDt = formData.endTime ? `${formData.endTime}T${timeStr}` : "";
+        
         setFormData((prev) => ({
           ...prev,
           isAllDay: false,
@@ -158,18 +195,6 @@ function EventModal({ event, onClose, onEventSaved }) {
     if (rule === "FREQ=YEARLY;INTERVAL=1") return "Yearly";
     if (rule.includes("BYDAY=MO,TU,WE,TH,FR")) return "Every weekday";
     return "Custom";
-  };
-
-  const toISOString = (dateTimeStr, isAllDay) => {
-    if (isAllDay) {
-      const localDate = new Date(dateTimeStr + "T00:00:00");
-      return localDate.toISOString();
-    } else {
-      const local = new Date(dateTimeStr);
-      return new Date(
-        local.getTime() - local.getTimezoneOffset() * 60000
-      ).toISOString();
-    }
   };
 
   const refreshEvents = async () => {
@@ -218,7 +243,7 @@ function EventModal({ event, onClose, onEventSaved }) {
 
     setIsSubmitting(true);
 
-    // Prepare reminders - filter out invalid ones
+    // ✅ Prepare reminders
     const validReminders = reminders
       .filter((r) => {
         const mins = parseInt(r.minutes_before);
@@ -229,13 +254,19 @@ function EventModal({ event, onClose, onEventSaved }) {
         method: r.method || "notification",
       }));
 
+    // ✅ PROPER TIMEZONE CONVERSION FOR SUBMISSION
     const eventData = {
       calendarId: parseInt(formData.calendarId),
       title: formData.title,
       description: formData.description,
       location: formData.location,
-      startTime: toISOString(formData.startTime, formData.isAllDay),
-      endTime: toISOString(formData.endTime, formData.isAllDay),
+      // Convert local time to UTC for database storage
+      startTime: formData.isAllDay 
+        ? new Date(formData.startTime + "T00:00:00").toISOString()
+        : localToUTC(formData.startTime),
+      endTime: formData.isAllDay
+        ? new Date(formData.endTime + "T00:00:00").toISOString()
+        : localToUTC(formData.endTime),
       isAllDay: formData.isAllDay,
       timezone: formData.timezone,
       isRecurring: !!formData.recurrenceRule,
@@ -245,7 +276,13 @@ function EventModal({ event, onClose, onEventSaved }) {
       attendees: attendees.map((a) => a.email),
     };
 
-    console.log("Submitting event with reminders:", validReminders);
+    console.log("📤 Submitting event with timezone conversion:", {
+      localStartTime: formData.startTime,
+      utcStartTime: eventData.startTime,
+      localEndTime: formData.endTime,
+      utcEndTime: eventData.endTime,
+      isAllDay: eventData.isAllDay,
+    });
 
     try {
       let eventId;
@@ -347,7 +384,7 @@ function EventModal({ event, onClose, onEventSaved }) {
           <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
             {formData.startTime && <HolidayBadge date={formData.startTime} />}
 
-            {/* Date/time */}
+            {/* Date/time - with clear labels */}
             <div className="flex gap-3">
               <span className="material-icons-outlined text-gray-500 mt-2">
                 schedule
@@ -382,6 +419,9 @@ function EventModal({ event, onClose, onEventSaved }) {
                     All day
                   </span>
                 </label>
+                <div className="mt-2 text-xs text-gray-500">
+                  Times are shown in your local timezone
+                </div>
               </div>
             </div>
 
@@ -411,7 +451,7 @@ function EventModal({ event, onClose, onEventSaved }) {
               </div>
             </div>
 
-            {/* Reminders - ALWAYS VISIBLE */}
+            {/* Reminders */}
             <div className="flex gap-3">
               <span className="material-icons-outlined text-gray-500 mt-2">
                 notifications
