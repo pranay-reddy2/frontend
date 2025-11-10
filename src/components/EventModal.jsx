@@ -161,16 +161,15 @@ function EventModal({ event, onClose, onEventSaved }) {
   };
 
   const toISOString = (dateTimeStr, isAllDay) => {
-    if (isAllDay) {
-      const localDate = new Date(dateTimeStr + "T00:00:00");
-      return localDate.toISOString();
-    } else {
-      const local = new Date(dateTimeStr);
-      return new Date(
-        local.getTime() - local.getTimezoneOffset() * 60000
-      ).toISOString();
-    }
-  };
+  if (isAllDay) {
+    const localDate = new Date(dateTimeStr + "T00:00:00");
+    return localDate.toISOString();
+  } else {
+    const local = new Date(dateTimeStr);
+    return local.toISOString(); 
+  }
+};
+
 
   const refreshEvents = async () => {
     const getDateRange = (date, view) => {
